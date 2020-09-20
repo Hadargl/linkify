@@ -1,7 +1,7 @@
 import pytesseract as tess
 
 tess.pytesseract.tesseract_cmd = r"/usr/local/bin/tesseract"
-from PIL import Image, ImageEnhance, ImageGrab
+from PIL import Image, ImageEnhance, ImageGrab, ImageOps
 import webbrowser
 import requests
 import difflib
@@ -9,10 +9,15 @@ from difflib import get_close_matches
 import tkinter
 import pyautogui
 import csv
-
+import sys
+from colorthief import ColorThief
+import cv2
 
 img = pyautogui.screenshot()
-# img = Image.open('Screenshot 2020-09-19 at 18.32.29.png')
+
+img.save('image.png')
+
+
 
 x1 = 0
 y1 = 0
@@ -21,21 +26,80 @@ y2 = img.height
 
 print("resolution: ", x2, y2)
 
-enhancer = ImageEnhance.Contrast(img)
+im = img.resize((img.width * 2, img.height * 2), 0)
+
+
+# im.show()
+
+imx1 = 0
+imy1 = 0
+imx2 = im.width
+imy2 = im.height
+
+# enhancer = ImageEnhance.Contrast(im)
 
 # contrastimg = enhancer.enhance(0.9)
-contrastimg = enhancer.enhance(0.9)
 
-cropped = contrastimg.crop((x1 + 100, y1 + 350, x2 * 0.5, y2 * 0.25))
+
+
+cropped = im.crop((x1, y1 + 750, imx2 * 0.4, imy2 * 0.24))
 
 sharpened = ImageEnhance.Sharpness(cropped)
 
 # sharpened_img = sharpened.enhance(6.0)
-sharpened_img = sharpened.enhance(3.0)
+sharpened_img = sharpened.enhance(6.0)
 
-text = tess.image_to_string(sharpened_img)
+print(sharpened_img.getpixel((sharpened_img.width * 0.5, sharpened_img.height * 0.5)))
 
-sharpened_img.show()
+pixel_colour1 = sharpened_img.getpixel((sharpened_img.width * 0.5, sharpened_img.height * 0.5))
+# pixel_colour2 = sharpened_img.getpixel((sharpened_img.width * 0.6, sharpened_img.height * 0.5))
+# pixel_colour3 = sharpened_img.getpixel((sharpened_img.width * 0.7, sharpened_img.height * 0.5))
+# pixel_colour4 = sharpened_img.getpixel((sharpened_img.width * 0.8, sharpened_img.height * 0.5))
+# pixel_colour5 = sharpened_img.getpixel((sharpened_img.width * 0.9, sharpened_img.height * 0.5))
+
+
+
+pixel_sum1 = pixel_colour1[0] + pixel_colour1[1] + pixel_colour1[2] + pixel_colour1[3]
+# pixel_sum2 = pixel_colour2[0] + pixel_colour2[1] + pixel_colour2[2] + pixel_colour2[3]
+# pixel_sum3 = pixel_colour3[0] + pixel_colour3[1] + pixel_colour3[2] + pixel_colour3[3]
+# pixel_sum4 = pixel_colour4[0] + pixel_colour4[1] + pixel_colour4[2] + pixel_colour4[3]
+# pixel_sum5 = pixel_colour5[0] + pixel_colour5[1] + pixel_colour5[2] + pixel_colour5[3]
+
+# pixel_average = pixel_sum1 + pixel_sum2 + pixel_sum3 + pixel_sum4 + pixel_sum5
+pixel_average = pixel_sum1
+
+print(pixel_average)
+
+if pixel_average < 912:
+    inv_img = ImageOps.invert(sharpened_img.convert('RGB'))
+    enhancer = ImageEnhance.Contrast(inv_img)
+    contrast_img = enhancer.enhance(3.5)
+    new_img = contrast_img
+    print('dark image')
+else:
+    new_img = sharpened_img.convert('RGB')
+    print('light image')
+
+
+
+# enhancer = ImageEnhance.Contrast(im)
+
+
+# if pixel_average < 912:
+#     contrastimg = enhancer.enhance(2.0)
+# else:
+#     contrastimg = enhancer.enhance(0.9)
+
+
+
+text = tess.image_to_string(new_img)
+
+# sharpened_img.show()
+new_img.show()
+
+print(text)
+
+
 # new_size = sharpened_img.resize((x2 * 2, y2 * 2))
 # new_size.show()
 
@@ -62,6 +126,7 @@ def extract_longest(text):
 
 longest_sequence = extract_longest(text)
 
+print(text)
 print(longest_sequence)
 
 
@@ -112,3 +177,5 @@ webbrowser.register(
     ),
 )
 webbrowser.get("chrome").open(new_url)
+
+# sys.exit(imagetotext.py)
