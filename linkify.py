@@ -1,4 +1,5 @@
 import pytesseract
+from pytesseract import Output
 pytesseract.pytesseract.tesseract_cmd = r"/usr/local/bin/tesseract"
 from PIL import Image, ImageEnhance, ImageGrab, ImageOps
 import webbrowser
@@ -9,58 +10,97 @@ import tkinter
 import pyautogui
 import csv
 import sys
-# from colorthief import Color
 import cv2
+import random
+import math
+
+
 
 img = pyautogui.screenshot()
+print("image captured")
 
 x1 = 0
 y1 = 0
 x2 = img.width
 y2 = img.height
 
-im = img.crop((x1 + 125, y1 + 375, x2 * 0.5, y2 * 0.24))
+im = img.crop((x1 + 125, y1 + 375, x2 * 0.3, y2 * 0.24))
 
-print("image width: " + str(im.width) + "image height: " + str(im.height))
+newsize = (im.width*2, im.height*2)
+im = im.resize(newsize)
 
-im.save('image.png')
+# print("image width: " + str(im.width) + "image height: " + str(im.height))
 
-img = cv2.imread('image.png')
+im.save("image.png")
 
-cv2.imshow("cropped", img)
+img = cv2.imread("image.png")
 
-pixel_colour1 = im.getpixel((im.width * 0.5, im.height * 0.5))
-pixel_colour2 = im.getpixel((im.width * 0.6, im.height * 0.5))
-pixel_colour3 = im.getpixel((im.width * 0.7, im.height * 0.5))
-pixel_colour4 = im.getpixel((im.width * 0.8, im.height * 0.5))
-pixel_colour5 = im.getpixel((im.width * 0.9, im.height * 0.5))
+# cv2.imshow("cropped", img)
 
-pixel_sum1 = pixel_colour1[0] + pixel_colour1[1] + pixel_colour1[2] + pixel_colour1[3]
-pixel_sum2 = pixel_colour2[0] + pixel_colour2[1] + pixel_colour2[2] + pixel_colour2[3]
-pixel_sum3 = pixel_colour3[0] + pixel_colour3[1] + pixel_colour3[2] + pixel_colour3[3]
-pixel_sum4 = pixel_colour4[0] + pixel_colour4[1] + pixel_colour4[2] + pixel_colour4[3]
-pixel_sum5 = pixel_colour5[0] + pixel_colour5[1] + pixel_colour5[2] + pixel_colour5[3]
+no_of_pixels = 50
 
-pixel_average = pixel_sum1 + pixel_sum2 + pixel_sum3 + pixel_sum4 + pixel_sum5
+list_of_pixels = []
 
-print("pixel average: " + str(pixel_average))
+for i in range(no_of_pixels):
+    list_of_pixels.append((math.floor(im.width * random.uniform(0, 0.9)), im.height / 2))
 
-if pixel_average < 3000:
+# print("pixel locations: " + str(list_of_pixels))
+
+pixel_colours = []
+
+for p in list_of_pixels:
+    pixel_colours += im.getpixel(p)
+
+
+# pixel tuple builder
+
+# pixel_rgb = ()
+# listofcolours = []
+
+# for p in list_of_pixels:
+#     pixel_rgb = im.getpixel(p)
+#     listofcolours.append(pixel_rgb)
+
+# print("tuple listofcolours: " + str(listofcolours))
+
+# print("pixel colours: " + str(pixel_colours))
+
+pixel_colours_total = sum(pixel_colours)
+
+print("pixel colour total: " + str(pixel_colours_total))
+
+
+if pixel_colours_total < 6000:
     new_img = 255 - img
-    print('dark image')
+    print("dark image detected")
     gray = cv2.cvtColor(new_img, cv2.COLOR_BGR2GRAY)
-    adaptive_threshold = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 39, 11)
+    adaptive_threshold = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 11)
 else:
     new_img = img
     gray = cv2.cvtColor(new_img, cv2.COLOR_BGR2GRAY)
-    adaptive_threshold = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 85, 15)
-    print('light image')
+    adaptive_threshold = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 55, 11)
+    print("light image detected")
 
+# cv2.imshow('ad', adaptive_threshold)
 
-config = "--psm 3"
+config = "-c tessedit_char_blacklist=¥—)] --psm 3 --oem 3"
 
 text = pytesseract.image_to_string(adaptive_threshold, config=config)
 
+# print(text)
+
+hImg, wImg = adaptive_threshold.shape
+
+
+box = pytesseract.image_to_boxes(adaptive_threshold)
+
+# for b in box.splitlines():
+#     print(b)
+#     b = b.split(' ')
+#     x,y,w,h = int(b[1]), int(b[2]), int(b[3]), int(b[4])
+#     cv2.rectangle(adaptive_threshold,(x,hImg - y),(w,hImg - h),(0,0,0),1)
 
 def extract_longest(text):
     sequences = []
@@ -81,9 +121,22 @@ def extract_longest(text):
 
     return longest_sequence
 
+
 longest_sequence = extract_longest(text)
 
-print("longest sequence: " + longest_sequence)
+
+# if the longest_sequence is too long, the matcher finds other terms inthe str that arent the root domain
+# Here, long sequences are cut to 30 chars long and then used to find a matching domain
+# further down we make a new variable called longest_sequence_for_path_build because we destroyed longest_sequence below
+if len(longest_sequence) > 30:
+    estimate_domain = [ x for x in longest_sequence]
+    del estimate_domain[30:len(longest_sequence)-1]
+    longest_sequence = ''.join(estimate_domain)
+else:
+    longest_sequence = longest_sequence
+
+
+print("initial estimate: " + longest_sequence)
 
 with open("top500Domains.csv", "r") as f:
     reader = csv.DictReader(f)
@@ -94,9 +147,13 @@ matches = get_close_matches(longest_sequence, domains, n=5, cutoff=0.1)
 
 closest_match = matches[0]
 
-print("closest match: " + closest_match)
+print("closest domain match: " + closest_match)
+
+longest_sequence_for_path_build = extract_longest(text)
 
 domain_len = len(closest_match)
+
+# Old URL builder
 
 # def build_url_path(link, match, domain_len):
 #     first_slash_loc = link.index("/")
@@ -124,28 +181,29 @@ def build_url_path(link, match, domain_len):
         return link[slash_loc:].strip()
     # elif link[0]=='/':
     #     slash_loc = first_slash_loc
-    elif '/' in link:
+    elif "/" in link:
         first_slash_loc = link.index("/")
         slash_loc = first_slash_loc
         return link[slash_loc:].strip()
     else:
-        linklist = [ x for x in link]
+        linklist = [x for x in link]
         del linklist[:domain_len]
-        linklist[0] = '/'
-        print("else print: ")
-        print(linklist)
-        print(type(linklist))
-        link = ''.join(linklist)
-        print(link)
+        linklist[0] = "/"
+        # print("else print: ")
+        # print(linklist)
+        # print(type(linklist))
+        link = "".join(linklist)
+        # print(link)
         return link
 
-new_path = build_url_path(longest_sequence, closest_match, domain_len)
 
-print(new_path)
+new_path = build_url_path(longest_sequence_for_path_build, closest_match, domain_len)
+
+print("estimated path: " + new_path)
 
 new_url = str(matches[0]) + str(new_path)
 
-print("new url: " + new_url + " length: " + str(len(new_url)))
+print("sending you to: " + new_url)
 
 cv2.imshow("adaptive th", adaptive_threshold)
 
