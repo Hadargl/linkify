@@ -14,8 +14,6 @@ import cv2
 import random
 import math
 
-
-
 img = pyautogui.screenshot()
 print("image captured")
 
@@ -26,51 +24,58 @@ y2 = img.height
 
 im = img.crop((x1 + 125, y1 + 375, x2 * 0.3, y2 * 0.24))
 
-newsize = (im.width*2, im.height*2)
-im = im.resize(newsize)
+imgx1 = 0
+imgy1 = 0
+imgx2 = im.width
+imgy2 = im.height
 
-# print("image width: " + str(im.width) + "image height: " + str(im.height))
+newsize = (im.width*2, im.height*2)
+
+im = im.resize(newsize)
 
 im.save("image.png")
 
 img = cv2.imread("image.png")
 
-# cv2.imshow("cropped", img)
+img_invert = 255 - img
+
+cv2.imshow("cropped", img)
+cv2.imshow("inverted", img_invert)
 
 no_of_pixels = 50
 
-list_of_pixels = []
+def img_brightness(img, no_of_pixels, img_width, img_height,):
 
-for i in range(no_of_pixels):
-    list_of_pixels.append((math.floor(im.width * random.uniform(0, 0.9)), im.height / 2))
+    list_of_pixels = []
 
-# print("pixel locations: " + str(list_of_pixels))
+    for i in range(no_of_pixels):
+        list_of_pixels.append((math.floor(img_width * random.uniform(0, 0.9)), img_height / 2))
 
-pixel_colours = []
+    pixel_colours = []
 
-for p in list_of_pixels:
-    pixel_colours += im.getpixel(p)
+    for p in list_of_pixels:
+        pixel_colours += im.getpixel(p)
+
+    pixel_colours_total = sum(pixel_colours)
+
+    return pixel_colours_total
+
+brightness = img_brightness(img, no_of_pixels, imgx2, imgy2)
+
+pixel_threshold = 640 * no_of_pixels
+# print("pixel colour total: " + str(brightness))
+# print("L/D threshold: " + str(pixel_threshold))
+
+# def which_image_is_brighter(img, img_invert, img_brightness):
+#     if img_brightness(img) > img_brightness(img_invert):
+#         return img
+#     else:
+#         return img_invert
+
+# new_img = which_image_is_brighter(img, img_invert, img_brightness)
 
 
-# pixel tuple builder
-
-# pixel_rgb = ()
-# listofcolours = []
-
-# for p in list_of_pixels:
-#     pixel_rgb = im.getpixel(p)
-#     listofcolours.append(pixel_rgb)
-
-# print("tuple listofcolours: " + str(listofcolours))
-
-# print("pixel colours: " + str(pixel_colours))
-
-pixel_colours_total = sum(pixel_colours)
-
-print("pixel colour total: " + str(pixel_colours_total))
-
-
-if pixel_colours_total < 6000:
+if brightness < int(pixel_threshold):
     new_img = 255 - img
     print("dark image detected")
     gray = cv2.cvtColor(new_img, cv2.COLOR_BGR2GRAY)
@@ -83,7 +88,7 @@ else:
         gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 55, 11)
     print("light image detected")
 
-# cv2.imshow('ad', adaptive_threshold)
+cv2.imshow('ad', adaptive_threshold)
 
 config = "-c tessedit_char_blacklist=¥—)] --psm 3 --oem 3"
 
@@ -93,9 +98,9 @@ text = pytesseract.image_to_string(adaptive_threshold, config=config)
 
 hImg, wImg = adaptive_threshold.shape
 
-
 box = pytesseract.image_to_boxes(adaptive_threshold)
 
+# shows detection boxes around chars
 # for b in box.splitlines():
 #     print(b)
 #     b = b.split(' ')
@@ -121,66 +126,60 @@ def extract_longest(text):
 
     return longest_sequence
 
-
 longest_sequence = extract_longest(text)
 
+def len_longest_domain_in_csv():
+    with open("top500Domains.csv", "r") as f:
+        reader = csv.DictReader(f)
+        domains = [row["Root Domain"] for row in reader]
+
+    longest_domain = ''
+
+    for d in domains:
+        if len(d) > len(longest_domain):
+            longest_domain = d
+    else:
+        longest_domain = longest_domain
+
+    return len(longest_domain)
 
 # if the longest_sequence is too long, the matcher finds other terms inthe str that arent the root domain
 # Here, long sequences are cut to 30 chars long and then used to find a matching domain
 # further down we make a new variable called longest_sequence_for_path_build because we destroyed longest_sequence below
-if len(longest_sequence) > 30:
-    estimate_domain = [ x for x in longest_sequence]
-    del estimate_domain[30:len(longest_sequence)-1]
-    longest_sequence = ''.join(estimate_domain)
+
+longest_domain_in_csv = len_longest_domain_in_csv()
+
+if len(longest_sequence) > longest_domain_in_csv:
+    # estimate_domain = [ x for x in longest_sequence]
+    # del estimate_domain[30:len(longest_sequence)-1]
+    # longest_sequence = ''.join(estimate_domain)
+    trimmed = longest_sequence[:longest_domain_in_csv]
+    print("trimmed string to make: " + str(trimmed))
 else:
-    longest_sequence = longest_sequence
+    # longest_sequence = longest_sequence
+    trimmed = longest_sequence
+    print("did not need to trim: " + str(trimmed))
 
-
-print("initial estimate: " + longest_sequence)
+print("initial estimate: " + trimmed)
 
 with open("top500Domains.csv", "r") as f:
     reader = csv.DictReader(f)
 
     domains = [row["Root Domain"] for row in reader]
 
-matches = get_close_matches(longest_sequence, domains, n=5, cutoff=0.1)
+matches = get_close_matches(trimmed, domains, n=5, cutoff=0.1)
 
 closest_match = matches[0]
 
 print("closest domain match: " + closest_match)
 
-longest_sequence_for_path_build = extract_longest(text)
-
 domain_len = len(closest_match)
 
-# Old URL builder
-
-# def build_url_path(link, match, domain_len):
-#     first_slash_loc = link.index("/")
-#     if "reddit" in match:
-#         slash_loc = first_slash_loc + 3
-#     elif link[0]=='/':
-#         slash_loc = first_slash_loc
-#     else:
-#         link[0] = '/'
-#     return link[slash_loc:].strip()
-
-# def build_url_path(link, match):
-#     first_slash_loc = link.index("/")
-#     if "reddit" in match:
-#         slash_loc = first_slash_loc + 3
-#     else:
-#         slash_loc = first_slash_loc
-#     return link[slash_loc:].strip()
-
-# this url path builder catches the youtube bug where the first "/" isnt recognised
 def build_url_path(link, match, domain_len):
     if "reddit" in match:
         first_slash_loc = link.index("/")
         slash_loc = first_slash_loc + 3
         return link[slash_loc:].strip()
-    # elif link[0]=='/':
-    #     slash_loc = first_slash_loc
     elif "/" in link:
         first_slash_loc = link.index("/")
         slash_loc = first_slash_loc
@@ -196,8 +195,7 @@ def build_url_path(link, match, domain_len):
         # print(link)
         return link
 
-
-new_path = build_url_path(longest_sequence_for_path_build, closest_match, domain_len)
+new_path = build_url_path(longest_sequence, closest_match, domain_len)
 
 print("estimated path: " + new_path)
 
@@ -205,7 +203,7 @@ new_url = str(matches[0]) + str(new_path)
 
 print("sending you to: " + new_url)
 
-cv2.imshow("adaptive th", adaptive_threshold)
+# cv2.imshow("adaptive th", adaptive_threshold)
 
 webbrowser.register(
     "chrome",
@@ -215,6 +213,5 @@ webbrowser.register(
     ),
 )
 webbrowser.get("chrome").open(new_url)
-
 
 cv2.waitKey(0)
